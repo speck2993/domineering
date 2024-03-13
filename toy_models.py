@@ -1,6 +1,6 @@
-import math, json
+import math
 import numpy as np
-import sys
+import torch
 
 from domineering_game import *
 from zobrist_hashing import *
@@ -11,14 +11,15 @@ class ToyModel1:
         pass
 
     def predict(self,representations):
+        #representations is a torch tensor of shape (batch_size,1,BOARD_SIZE,BOARD_SIZE)
         prediction_scores = []
         prediction_likelihoods = []
         for r in representations:
             score = np.random.rand(1)
             move_evals = np.random.rand(N_MOVES)
-            prediction_scores.append(score)
+            prediction_scores.append([score])
             prediction_likelihoods.append(move_evals)
-        return prediction_scores,prediction_likelihoods
+        return [torch.tensor(np.array(prediction_scores)),torch.tensor(np.array(prediction_likelihoods))]
 
 def sigmoid(x):
   return 1 / (1 + math.exp(-x))
@@ -32,7 +33,7 @@ def simple_score(rep):
             if not (rep[i][j] or rep[i][j+1]):
                 score -= 1
 
-    return sigmoid(score)
+    return sigmoid(score/3)
 
 class ToyModel2:
     def __init__(self):
@@ -46,7 +47,7 @@ class ToyModel2:
             move_evals = np.random.rand(N_MOVES)
             prediction_scores.append([score])
             prediction_likelihoods.append(move_evals)
-        return prediction_scores,prediction_likelihoods
+        return [torch.tensor(np.array(prediction_scores)),torch.tensor(np.array(prediction_likelihoods))]
     
 if __name__ == "__main__":
     move_hashes = np.load("zobrist_hashes_8x8.npy")

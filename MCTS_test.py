@@ -2,9 +2,9 @@ import time, torch
 
 from domineering_game import *
 from zobrist_hashing import *
+from toy_models import *
 
 from collections import OrderedDict
-import heapq
 
 class LRUCache:
     def __init__(self, capacity: int):
@@ -62,8 +62,9 @@ class MCTS_PUCT:
         self.prev_evaluations = prev_evaluations
         zobrist_hash = compute_hash(game[0], zobrist_hashes)
         self.root = PUCT_Node(game, zobrist_hash, None)
-        self.root.win_prob = 0.5
-        self.root.move_probs = np.ones(N_MOVES)/N_MOVES
+        initial_eval = self.model.predict(torch.tensor([[representation(game)]], dtype=torch.float32))
+        self.root.win_prob = initial_eval[0].detach().numpy()[0]
+        self.root.move_probs = initial_eval[1].detach().numpy()[0]
         self.C = C #exploration parameter, higher values favor breadth
 
     def search(self,root):
@@ -147,14 +148,15 @@ class MCTS_PUCT:
             #update win_prob
             if score_changing:
                 prev_score = currentNode.win_prob
-                if not currentNode.game[1]:
-                    # Player 0
-                    # Maximize win prob
-                    currentNode.win_prob = max([child.win_prob for child in currentNode.children])
-                else:
-                    # Player 1
-                    # Minimize win prob
-                    currentNode.win_prob = min([child.win_prob for child in currentNode.children])
+                if len(currentNode.children) != 0:
+                    if not currentNode.game[1]:
+                        # Player 0
+                        # Maximize win prob
+                        currentNode.win_prob = max([child.win_prob for child in currentNode.children])
+                    else:
+                        # Player 1
+                        # Minimize win prob
+                        currentNode.win_prob = min([child.win_prob for child in currentNode.children])
                 score_changing = (prev_score != currentNode.win_prob)
             
             if finished_changing:
@@ -271,3 +273,14 @@ def human_vs_model(human_turn,model,move_hashes,zobrist_hashes,prev_evaluations,
         print("Model wins!")
     else:
         print("Human wins!")
+
+if __name__=="__main__":
+    tm2 = ToyModel1()
+    move_hashes = np.load("zobrist_hashes_8x8.npy")
+    zobrist_hashes = np.load("zobrist_hashes_8x8_zobrist.npy")
+    prev_evaluations2 = LRUCache(4000000)
+
+    # Profile self-play code to identify bottlenecks
+
+    import cProfile
+    cProfile.run("self_play(tm2,move_hashes,zobrist_hashes,prev_evaluations2,C=0.1,time_per_move=5.0)")
