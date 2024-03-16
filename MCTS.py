@@ -73,18 +73,18 @@ class MCTS_PUCT:
         self.root = PUCT_Node(game, zobrist_hash, None)
         #initial_eval = self.model.predict(torch.tensor([[representation(game)]], dtype=torch.float32))
         initial_eval = self.model.predict(torch.from_numpy(np.array([[representation(game)]], dtype=np.float32)))
-        self.root.win_prob = initial_eval[0].detach().numpy()[0]
-        self.root.move_probs = initial_eval[1].detach().numpy()[0]
+        self.root.win_prob = initial_eval[0].cpu().detach().numpy()[0]
+        self.root.move_probs = initial_eval[1].cpu().detach().numpy()[0]
         self.C = C #exploration parameter, higher values favor breadth
 
-    def search(self):
+    def search(self,noise=0):
         #returns True if the search is still running, False if it is done
-        node = self.select()
+        node = self.select(noise)
         if node:
             self.expand(node)
         return not(self.root.done)
 
-    def select(self):
+    def select(self,noise=0):
         # Starting from root, successively select child with highest exploit score
         # Exploit score = win_prob (from model) + C*move_prob (from model)*sqrt(log(visits to previous node))/(visits to current node)
         # Ignore nodes that have been fully expanded
@@ -112,10 +112,12 @@ class MCTS_PUCT:
                 puct_scores = []
                 if current.game[1]:
                     # Player 1, minimize win prob
-                    puct_scores = [(1 - child.win_prob) + self.C*current.move_probs[child.move]*np.sqrt(np.log(current.visits)/child.visits) for child in current.children]
+                    noise_matrix = np.random.dirichlet([noise]*len(current.children))
+                    puct_scores = [(1 - child.win_prob) + self.C*current.move_probs[child.move]*np.sqrt(np.log(current.visits)/child.visits) + noise_matrix[i] for i, child in enumerate(current.children)]
                 else:
                     # Player 0, maximize win prob
-                    puct_scores = [child.win_prob + self.C*current.move_probs[child.move]*np.sqrt(np.log(current.visits)/child.visits) for child in current.children]
+                    noise_matrix = np.random.dirichlet([noise]*len(current.children))
+                    puct_scores = [child.win_prob + self.C*current.move_probs[child.move]*np.sqrt(np.log(current.visits)/child.visits) + noise_matrix[i] for i, child in enumerate(current.children)]
                 best_child_index = np.argmax(puct_scores)
                 current.best_child_index = best_child_index
                 if current.visits > MCTS_PUCT.start_tracking_threshold and current.toggle:
@@ -187,14 +189,14 @@ class MCTS_PUCT:
         
         boards_to_eval = torch.tensor(np.array(boards_to_eval, dtype=np.float32))
         win_probs, move_probs = self.model.predict(boards_to_eval)
-        win_probs = win_probs.detach().numpy()
-        move_probs = move_probs.detach().numpy()
+        win_probs = win_probs.cpu().detach().numpy()
+        move_probs = move_probs.cpu().detach().numpy()
         for i, node in enumerate(nodes_to_eval):
             node.win_prob = win_probs[i][0]
             node.move_probs = move_probs[i]
             self.prev_evaluations.put(node.zobrist_hash, (win_probs[i][0], move_probs[i]))
 
-    def expand(self,node):
+    def expand(self, node):
         # Create children of node and batch evaluate them
 
         new_nodes = []
@@ -260,10 +262,13 @@ class MCTS_PUCT:
         # Move was not legal
         raise ValueError("Illegal move")
     
-def self_play(model, move_hashes, zobrist_hashes, prev_evaluations, C=0.1, time_per_move = 1.0):
+def self_play(model, move_hashes, zobrist_hashes, prev_evaluations, noise=0, C=1.0,time_per_move = 1.0,verbose=False):
     # Play a game against itself using MCTS
     game = domineering_game()
     mcts = MCTS_PUCT(game, model, move_hashes, zobrist_hashes, prev_evaluations, C)
+    if verbose:
+        print("Starting self play")
+        display(mcts.root.game)
     still_searching = True
     while not mcts.root.game[3]:
         # Play until the game is over
@@ -271,8 +276,9 @@ def self_play(model, move_hashes, zobrist_hashes, prev_evaluations, C=0.1, time_
         while (time.time() - time0 < time_per_move) & still_searching:
             # Search until time is up
             # Time is measured in second
-            still_searching = mcts.search()
+            still_searching = mcts.search(noise)
         # Choose the best move
+        still_searching = mcts.search(noise)
         move = None
         if mcts.root.game[1]:
             # Player 1
@@ -282,38 +288,49 @@ def self_play(model, move_hashes, zobrist_hashes, prev_evaluations, C=0.1, time_
             # Player 0
             # Maximize win prob
             move = max(mcts.root.children, key=lambda child: child.win_prob).move
-        print("Positions being considered: " + str(mcts.root.count_descendants()))
+        #print("Positions being considered: " + str(mcts.root.count_descendants()))
         mcts.make_move(move)
+        if verbose:
+            display(mcts.root.game)
     return mcts.root.game[5], mcts.root.game[2] # Return the history of moves and the winner
 
-def Arena(model1,model2,move_hashes,zobrist_hashes,prev_evals1,prev_evals2,C=0.1,time_per_move=1.0):
+def Arena(model1,model2,move_hashes,zobrist_hashes,prev_evals1,prev_evals2,noise=0,C=1.0,time_per_move=1.0,verbose=False):
     # Play a game between two models
     game1 = domineering_game()
     game2 = domineering_game()
     mcts1 = MCTS_PUCT(game1, model1, move_hashes, zobrist_hashes, prev_evals1, C)
     mcts2 = MCTS_PUCT(game2, model2, move_hashes, zobrist_hashes, prev_evals2, C)
+    if verbose:
+        print("Starting Arena game")
+        display(mcts1.root.game)
     still_searching = True
     while not mcts1.root.game[3]:
         # Play until the game is over
         # Alternate players
         time0 = time.time()
         while (time.time() - time0 < time_per_move) & still_searching:
-            still_searching = mcts1.search()
+            still_searching = mcts1.search(noise)
+        still_searching = mcts1.search(noise)
         move = max(mcts1.root.children, key=lambda child: child.win_prob).move
         mcts1.make_move(move)
         mcts2.make_move(move)
+        if verbose:
+            display(mcts1.root.game)
         if mcts1.root.game[3]:
             break
 
         time0 = time.time()
         while (time.time() - time0 < time_per_move) & still_searching:
-            still_searching = mcts2.search()
+            still_searching = mcts2.search(noise)
+        still_searching = mcts2.search(noise)
         move = min(mcts2.root.children, key=lambda child: child.win_prob).move
         mcts1.make_move(move)
         mcts2.make_move(move)
+        if verbose:
+            display(mcts2.root.game)
     return mcts1.root.game[5], mcts1.root.game[2] # Return the history of moves and the winner
 
-def human_vs_model(human_turn,model,move_hashes,zobrist_hashes,prev_evaluations,C=0.1,time_per_move=5.0):
+def human_vs_model(human_turn,model,move_hashes,zobrist_hashes,prev_evaluations,C=1.0,time_per_move=5.0):
     # Play a game between a human and a model
     game = domineering_game()
     mcts = MCTS_PUCT(game, model, move_hashes, zobrist_hashes, prev_evaluations, C)
@@ -355,8 +372,8 @@ def human_vs_model(human_turn,model,move_hashes,zobrist_hashes,prev_evaluations,
 
 if __name__=="__main__":
     tm = ToyModel2()
-    move_hashes = np.load("zobrist_hashes_8x8.npy")
-    zobrist_hashes = np.load("zobrist_hashes_8x8_zobrist.npy")
+    move_hashes = np.load("zobrist_hashes/zobrist_hashes_8x8.npy")
+    zobrist_hashes = np.load("zobrist_hashes/zobrist_hashes_8x8_zobrist.npy")
     prev_evaluations = LRUCache(4000000)
 
     self_play(tm,move_hashes,zobrist_hashes,prev_evaluations,C=0.1,time_per_move=1.0)

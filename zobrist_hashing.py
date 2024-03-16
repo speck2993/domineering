@@ -54,5 +54,5 @@ def compute_hash(position, zobrist_hashes):
     return hash
 
 if __name__ == "__main__":
-    generate_zobrist_hashes(16, "zobrist_hashes_16x16")
+    generate_zobrist_hashes(6, "zobrist_hashes/zobrist_hashes_6x6")
     

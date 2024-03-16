@@ -4,7 +4,6 @@ import torch
 
 from domineering_game import *
 from zobrist_hashing import *
-from MCTS_test import *
 
 class ToyModel1:
     def __init__(self):
@@ -48,10 +47,3 @@ class ToyModel2:
             prediction_scores.append([score])
             prediction_likelihoods.append(move_evals)
         return [torch.tensor(np.array(prediction_scores)),torch.tensor(np.array(prediction_likelihoods))]
-    
-if __name__ == "__main__":
-    move_hashes = np.load("zobrist_hashes_8x8.npy")
-    zobrist_hashes = np.load("zobrist_hashes_8x8_zobrist.npy")
-    tm2 = ToyModel2()
-    prev_evaluations2 = LRUCache(4000000)
-    human_vs_model(True,tm2,move_hashes,zobrist_hashes,prev_evaluations2,time_per_move=10)

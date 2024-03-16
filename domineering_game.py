@@ -34,7 +34,7 @@ for move in range(0,N_MOVES):
     if move<P_MOVES:
         i,j = divmod(move,BOARD_SIZE)
         equivalent_move = BOARD_SIZE*j + i + P_MOVES
-        p1_eliminated_moves = [move-8,move,move+8]
+        p1_eliminated_moves = [move-BOARD_SIZE,move,move+BOARD_SIZE]
         p2_eliminated_moves = [equivalent_move - BOARD_SIZE, equivalent_move - BOARD_SIZE+1, equivalent_move, equivalent_move+1]
         for m in p1_eliminated_moves:
             if 0 <= m < P_MOVES:
@@ -46,7 +46,7 @@ for move in range(0,N_MOVES):
         j,i = divmod(move-P_MOVES,BOARD_SIZE)
         equivalent_move = BOARD_SIZE*i + j
         p1_eliminated_moves = [equivalent_move - BOARD_SIZE, equivalent_move - BOARD_SIZE+1, equivalent_move, equivalent_move+1]
-        p2_eliminated_moves = [move-8,move,move+8]
+        p2_eliminated_moves = [move-BOARD_SIZE,move,move+BOARD_SIZE]
         for m in p1_eliminated_moves:
             if 0 <= m < P_MOVES:
                 valid_moves[m] = False
