@@ -133,10 +133,29 @@ def self_play_training(model_path,data_path,self_play_time,arena_time,move_hashe
 
     return model
 
+def gen_training_data(model,data_path,move_hashes,zobrist_hashes,prev_eval_size,games,noise):
+    # Similar to self_play_training, but for a fixed model
+    # Uses extremely fast self-play games to generate low-quality training data
+    game_history = []
+    prev_eval = LRUCache(prev_eval_size)
+    for game in range(games):
+        game_data = self_play(model,move_hashes,zobrist_hashes,prev_eval,noise=noise,time_per_move=0.02,verbose=False)
+        game_history.append(game_data)
+    with open(data_path, 'a+') as f:
+        for game in game_history:
+            line = ""
+            for move in game[0]:
+                line += str(move) + ","
+            line += str(int(game[1]))
+            f.write(line + "\n")
+    return
+
 if __name__ == "__main__":
     #initialize the zobrist hashes
     move_hashes = np.load("zobrist_hashes/zobrist_hashes_8x8.npy")
     zobrist_hashes = np.load("zobrist_hashes/zobrist_hashes_8x8_zobrist.npy")
-    prev_eval_size = 10000000
+    prev_eval_size = 1000000
 
-    self_play_training("models/domineering_8x8_model.pth","training_data/domineering_8x8_data.npy",0.1,0.2,move_hashes,zobrist_hashes,prev_eval_size,10,100,50)
+    tm = ToyModel1()
+    #gen_training_data(tm,"training_data/domineering_8x8_data.npy",move_hashes,zobrist_hashes,prev_eval_size,1000,0.01)
+    self_play_training("models/domineering_8x8_model.pth","training_data/domineering_8x8_data.npy",0.5,1,move_hashes,zobrist_hashes,prev_eval_size,10,500,50)

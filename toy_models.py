@@ -16,7 +16,7 @@ class ToyModel1:
         for r in representations:
             score = np.random.rand(1)
             move_evals = np.random.rand(N_MOVES)
-            prediction_scores.append([score])
+            prediction_scores.append(score)
             prediction_likelihoods.append(move_evals)
         return [torch.tensor(np.array(prediction_scores)),torch.tensor(np.array(prediction_likelihoods))]
 
